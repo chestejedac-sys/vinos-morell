@@ -1,0 +1,37 @@
+{
+  "catalog": {
+    "vino-uva": {
+      "name": "Vino de Uva Semidulce",
+      "price": 500,
+      "emoji": "🍷",
+      "cat": "bebidas",
+      "desc": "Vino artesanal de uva, sabor semidulce suave y aromático."
+    },
+    "vinagre": {
+      "name": "Vinagre Condimentado (1 litro)",
+      "price": 300,
+      "emoji": "🧴",
+      "cat": "bebidas",
+      "desc": "Vinagre condimentado casero, presentación de 1 litro, ideal para tus comidas."
+    },
+    "pru": {
+      "name": "Pru (330ml)",
+      "price": 80,
+      "emoji": "🥤",
+      "cat": "bebidas",
+      "desc": "Bebida fermentada tradicional cubana, refrescante y con historia."
+    }
+  },
+  "categories": [
+    {
+      "id": "bebidas",
+      "name": "Bebidas",
+      "emoji": "🍷"
+    },
+    {
+      "id": "dulces",
+      "name": "Dulces",
+      "emoji": "🍬"
+    }
+  ]
+}
