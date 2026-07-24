@@ -516,6 +516,10 @@ main{position:relative;z-index:5;max-width:600px;margin:0 auto;padding:18px 14px
       <input class="form-input" id="ord-address" placeholder="Calle, número, referencia">
     </div>
     <div class="form-field">
+      <label class="form-label">Enviar pedido a</label>
+      <div class="form-radio-row" id="wa-number-row"></div>
+    </div>
+    <div class="form-field">
       <label class="form-label">Notas (opcional)</label>
       <input class="form-input" id="ord-notes" placeholder="Alguna indicación adicional">
     </div>
@@ -539,9 +543,22 @@ main{position:relative;z-index:5;max-width:600px;margin:0 auto;padding:18px 14px
     <div class="confirm-title">¡Pedido Enviado!</div>
     <div class="confirm-msg">
       Tu pedido se abrió en WhatsApp. Si no cargó automáticamente, contáctanos directo:
-      <span class="confirm-phone" id="confirm-phone-display">+53 5 6347137</span>
+      <span class="confirm-phone">+53 5 6347137</span>
+      <span class="confirm-phone">+53 54398254</span>
     </div>
     <button class="glass-btn primary" style="width:100%;padding:13px;" onclick="closeConfirm()">Entendido</button>
+  </div>
+</div>
+
+<!-- ═══ WHATSAPP CHOICE MODAL ═══ -->
+<div id="wa-choice-modal" class="modal-wrap">
+  <div class="modal-box glass">
+    <h3>💬 Contactar por WhatsApp</h3>
+    <p class="sub">Elige a qué número escribir</p>
+    <div id="wa-choice-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div class="modal-btns">
+      <button class="glass-btn modal-btn" onclick="closeWaChoice()">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -579,7 +596,10 @@ main{position:relative;z-index:5;max-width:600px;margin:0 auto;padding:18px 14px
 /* ═══════════════════════════════════════════
    DATA
 ═══════════════════════════════════════════ */
-const WHATSAPP_NUMBER = '5356347137';
+const WHATSAPP_NUMBERS = [
+  { label:'+53 5 6347137', number:'5356347137' },
+  { label:'+53 54398254', number:'5354398254' }
+];
 
 let CATEGORIES = [
   { id:'bebidas', name:'Bebidas', emoji:'🍷' },
@@ -801,6 +821,18 @@ function updateOrderTotal(){
   document.getElementById('ord-total').textContent = total + '$';
 }
 
+let selectedWaNumber = WHATSAPP_NUMBERS[0].number;
+function renderWaNumberRow(){
+  const row = document.getElementById('wa-number-row');
+  row.innerHTML = WHATSAPP_NUMBERS.map((w,i)=>
+    `<div class="form-radio-opt${w.number===selectedWaNumber?' selected':''}" onclick="selectWaNumber('${w.number}')">${w.label}</div>`
+  ).join('');
+}
+function selectWaNumber(num){
+  selectedWaNumber = num;
+  renderWaNumberRow();
+}
+
 function openOrder(){
   if (Object.keys(cart).filter(k=>cart[k].qty>0).length===0){
     toast('🛒 Agrega productos primero');
@@ -808,6 +840,8 @@ function openOrder(){
   }
   populateZoneSelect();
   selectDeliveryType('recoger');
+  selectedWaNumber = WHATSAPP_NUMBERS[0].number;
+  renderWaNumberRow();
   updateOrderTotal();
   closeCart();
   document.getElementById('overlay').classList.add('show');
@@ -852,7 +886,7 @@ function submitOrder(){
   if (notes) msg += `📝 *Notas:* ${notes}\n`;
   msg += `\n💰 *Total: ${document.getElementById('ord-total').textContent}*`;
 
-  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(`https://wa.me/${selectedWaNumber}?text=${encodeURIComponent(msg)}`, '_blank');
 
   closeOrder();
   document.getElementById('overlay').classList.add('show');
@@ -867,12 +901,25 @@ function closeConfirm(){
 }
 
 function openWhatsAppDirect(){
-  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('¡Hola! Me gustaría más información sobre sus productos 🍷')}`, '_blank');
+  const list = document.getElementById('wa-choice-list');
+  list.innerHTML = WHATSAPP_NUMBERS.map(w=>
+    `<button class="glass-btn primary" style="width:100%;padding:13px;" onclick="goToWhatsApp('${w.number}')">💬 ${w.label}</button>`
+  ).join('');
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('wa-choice-modal').classList.add('open');
   return false;
+}
+function goToWhatsApp(num){
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent('¡Hola! Me gustaría más información sobre sus productos 🍷')}`, '_blank');
+  closeWaChoice();
+}
+function closeWaChoice(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('wa-choice-modal').classList.remove('open');
 }
 
 function closeAll(){
-  closeCart(); closeOrder(); closeConfirm(); closePin(); closeAdmin();
+  closeCart(); closeOrder(); closeConfirm(); closePin(); closeAdmin(); closeWaChoice();
 }
 
 /* ═══════════════════════════════════════════
@@ -1209,13 +1256,13 @@ function saveAllChanges(){
 
 function persistLocal(){
   localStorage.setItem('lacava_products', JSON.stringify({ catalog:CATALOG, categories:CATEGORIES }));
-  localStorage.setItem('lacava_zones', JSON.stringify({ zones:ZONES }));
-  localStorage.setItem('lacava_settings', JSON.stringify(SETTINGS));
+  localStorage.setItem('lacava_settings', JSON.stringify({ zones:ZONES, settings:SETTINGS }));
 }
 
 /* ═══════════════════════════════════════════
-   GITHUB SYNC — 3 archivos independientes:
-   products.json (catalog+categories), zones.json, settings.json
+   GITHUB SYNC — 2 archivos:
+   products.json (catálogo + categorías, crece con el negocio)
+   settings.json (zonas, banner, portada, visión/misión — cambia poco)
 ═══════════════════════════════════════════ */
 var GH_TOKEN = '';
 
@@ -1261,15 +1308,14 @@ async function syncToGitHub(){
 
   try {
     await putFileToGH(det, 'products.json', { catalog:CATALOG, categories:CATEGORIES });
-    await putFileToGH(det, 'zones.json', { zones:ZONES });
-    await putFileToGH(det, 'settings.json', SETTINGS);
+    await putFileToGH(det, 'settings.json', { zones:ZONES, settings:SETTINGS });
     toast('✅ Sincronizado con GitHub exitosamente');
   } catch(e){ toast('⚠️ GitHub: ' + e.message); }
 }
 
-/* Load saved data: 3 archivos externos primero (GitHub Pages), fallback a localStorage */
+/* Load saved data: products.json + settings.json primero (GitHub Pages), fallback a localStorage */
 (async function loadSavedData(){
-  let productsLoaded = false, zonesLoaded = false, settingsLoaded = false;
+  let productsLoaded = false, settingsLoaded = false;
 
   try {
     const res = await fetch('products.json?_=' + Date.now());
@@ -1283,21 +1329,12 @@ async function syncToGitHub(){
   } catch(e){}
 
   try {
-    const res = await fetch('zones.json?_=' + Date.now());
-    if (res.ok){
-      const data = await res.json();
-      if (data.zones) ZONES = data.zones;
-      localStorage.setItem('lacava_zones', JSON.stringify(data));
-      zonesLoaded = true;
-    }
-  } catch(e){}
-
-  try {
     const res = await fetch('settings.json?_=' + Date.now());
     if (res.ok){
       const data = await res.json();
-      SETTINGS = Object.assign(SETTINGS, data);
-      localStorage.setItem('lacava_settings', JSON.stringify(SETTINGS));
+      if (data.zones) ZONES = data.zones;
+      if (data.settings) SETTINGS = Object.assign(SETTINGS, data.settings);
+      localStorage.setItem('lacava_settings', JSON.stringify(data));
       settingsLoaded = true;
     }
   } catch(e){}
@@ -1311,16 +1348,13 @@ async function syncToGitHub(){
       } catch(e){}
     }
   }
-  if (!zonesLoaded){
-    const saved = localStorage.getItem('lacava_zones');
-    if (saved){
-      try { const data = JSON.parse(saved); if (data.zones) ZONES = data.zones; } catch(e){}
-    }
-  }
   if (!settingsLoaded){
     const saved = localStorage.getItem('lacava_settings');
     if (saved){
-      try { SETTINGS = Object.assign(SETTINGS, JSON.parse(saved)); } catch(e){}
+      try { const data = JSON.parse(saved);
+        if (data.zones) ZONES = data.zones;
+        if (data.settings) SETTINGS = Object.assign(SETTINGS, data.settings);
+      } catch(e){}
     }
   }
 
