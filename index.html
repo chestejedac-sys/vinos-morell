@@ -1010,7 +1010,7 @@ const ADMIN_TABS = [
 function openAdmin(){
   document.getElementById('overlay').classList.add('show');
   document.getElementById('admin-modal').classList.add('open');
-  loadGHConfig();
+  GH_TOKEN = localStorage.getItem('lacava_gh_token') || '';
   renderAdminTabs();
   renderAdminPane();
 }
@@ -1039,7 +1039,7 @@ function renderAdminPane(){
   else if (adminActiveTab==='banner') pane.innerHTML = renderBannerPane();
   else if (adminActiveTab==='portada') pane.innerHTML = renderPortadaPane();
   else if (adminActiveTab==='nosotros') pane.innerHTML = renderNosotrosPane();
-  else if (adminActiveTab==='config') pane.innerHTML = renderConfigPane();
+  else if (adminActiveTab==='config'){ pane.innerHTML = renderConfigPane(); loadGHConfig(); }
 }
 
 /* ── Productos ── */
@@ -1253,7 +1253,7 @@ function renderConfigPane(){
 /* ═══════════════════════════════════════════
    SAVE ALL CHANGES
 ═══════════════════════════════════════════ */
-function saveAllChanges(){
+async function saveAllChanges(){
   // Products: prices + categories + availability from inputs
   Object.keys(CATALOG).forEach(key=>{
     const priceEl = document.getElementById('peprice-'+key);
@@ -1285,8 +1285,13 @@ function saveAllChanges(){
   renderPromo();
   renderHero();
   renderSubtitle();
-  toast('💾 Guardado — cambios aplicados ✅');
-  syncToGitHub();
+  toast('💾 Guardado localmente — sincronizando con GitHub...');
+
+  const btn = document.querySelector('#admin-modal .modal-btn');
+  const originalLabel = btn ? btn.innerHTML : '';
+  if (btn){ btn.disabled = true; btn.innerHTML = '⏳ Sincronizando...'; }
+  await syncToGitHub();
+  if (btn){ btn.disabled = false; btn.innerHTML = originalLabel; }
 }
 
 function persistLocal(){
@@ -1324,16 +1329,29 @@ async function putFileToGH(det, filename, dataObj){
   var content = btoa(unescape(encodeURIComponent(JSON.stringify(dataObj, null, 2))));
   var apiUrl = 'https://api.github.com/repos/' + det.user + '/' + det.repo + '/contents/' + filename;
   var sha = '';
-  var getRes = await fetch(apiUrl, { headers:{ Authorization:'token '+GH_TOKEN, Accept:'application/vnd.github.v3+json' } });
+  var ctrl1 = new AbortController();
+  var t1 = setTimeout(()=>ctrl1.abort(), 15000);
+  var getRes;
+  try {
+    getRes = await fetch(apiUrl, { headers:{ Authorization:'token '+GH_TOKEN, Accept:'application/vnd.github.v3+json' }, signal: ctrl1.signal });
+  } catch(e){ clearTimeout(t1); throw new Error(filename + ': sin conexión con GitHub (revisa tu internet)'); }
+  clearTimeout(t1);
   if (getRes.ok){ var d = await getRes.json(); sha = d.sha; }
   var body = { message:'Actualizar ' + filename + ' via admin panel', content:content };
   if (sha) body.sha = sha;
-  var putRes = await fetch(apiUrl, {
-    method:'PUT',
-    headers:{ Authorization:'token '+GH_TOKEN, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!putRes.ok){ var err = await putRes.json(); throw new Error(filename + ': ' + (err.message || putRes.status)); }
+  var ctrl2 = new AbortController();
+  var t2 = setTimeout(()=>ctrl2.abort(), 15000);
+  var putRes;
+  try {
+    putRes = await fetch(apiUrl, {
+      method:'PUT',
+      headers:{ Authorization:'token '+GH_TOKEN, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl2.signal
+    });
+  } catch(e){ clearTimeout(t2); throw new Error(filename + ': sin conexión con GitHub (revisa tu internet)'); }
+  clearTimeout(t2);
+  if (!putRes.ok){ var err = await putRes.json().catch(()=>({})); throw new Error(filename + ': ' + (err.message || putRes.status)); }
 }
 
 async function syncToGitHub(){
@@ -1344,8 +1362,8 @@ async function syncToGitHub(){
   try {
     await putFileToGH(det, 'products.json', { catalog:CATALOG, categories:CATEGORIES });
     await putFileToGH(det, 'settings.json', { zones:ZONES, settings:SETTINGS });
-    toast('✅ Sincronizado con GitHub exitosamente');
-  } catch(e){ toast('⚠️ GitHub: ' + e.message); }
+    toast('✅ Sincronizado con GitHub exitosamente', 5000);
+  } catch(e){ toast('⚠️ GitHub: ' + e.message, 6000); }
 }
 
 /* Load saved data: products.json + settings.json primero (GitHub Pages), fallback a localStorage */
@@ -1404,11 +1422,12 @@ async function syncToGitHub(){
 /* ═══════════════════════════════════════════
    TOAST / INIT
 ═══════════════════════════════════════════ */
-function toast(msg){
+function toast(msg, duration){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2400);
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove('show'), duration || 2400);
 }
 
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') closeAll(); });
