@@ -26,6 +26,15 @@
       "desc": "Bebida fermentada tradicional cubana, refrescante y con historia.",
       "photo": "",
       "available": true
+    },
+    "custom_1785122792204": {
+      "name": "Dulce de Harina",
+      "price": 60,
+      "emoji": "🥮",
+      "cat": "dulces",
+      "desc": "Una cuña de dulce de harina artesanal que te hará saltar por los cielos😍👄.",
+      "photo": "",
+      "available": true
     }
   },
   "categories": [
